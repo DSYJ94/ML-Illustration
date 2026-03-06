@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How AI Learns</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #07080f;
+      --bg2:    #0d0f1e;
+      --bg3:    #13162a;
+      --border: rgba(100,120,255,.13);
+      --text:   #ddd8cc;
+      --dim:    rgba(221,216,204,.45);
+      --gold:   #f0a500;
+      --ice:    #5bc8ff;
+      --serif:  'Playfair Display', Georgia, serif;
+      --mono:   'IBM Plex Mono', 'Courier New', monospace;
+    }
+    html,body { min-height:100vh; background:var(--bg); color:var(--text); font-family:var(--mono); }
+    body::before {
+      content:''; position:fixed; inset:0; pointer-events:none;
+      background-image:
+        linear-gradient(rgba(80,100,255,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(80,100,255,.04) 1px, transparent 1px);
+      background-size:44px 44px;
+    }
+    .container { max-width:920px; margin:0 auto; padding:52px 24px 96px; }
+
+    /* ── HEADER ── */
+    h1 { font-family:var(--serif); font-size:clamp(36px,7vw,60px); font-weight:700; line-height:1.08; color:#fff; margin-bottom:14px; }
+    h1 em { font-style:italic; color:var(--gold); }
+    .subtitle { font-size:13.5px; color:var(--dim); line-height:1.85; max-width:560px; }
+
+    /* ── TABS ── */
+    .tabs { display:flex; gap:2px; margin-top:44px; border-bottom:1px solid var(--border); }
+    .tab-btn {
+      font-family:var(--mono); font-size:11.5px; font-weight:500; letter-spacing:.05em;
+      padding:11px 22px; background:none; border:1px solid transparent; border-bottom:none;
+      color:var(--dim); cursor:pointer; border-radius:7px 7px 0 0; transition:color .2s;
+      position:relative; bottom:-1px;
+    }
+    .tab-btn:hover { color:var(--text); }
+    .tab-btn.active { color:var(--gold); border-color:var(--border); border-bottom-color:var(--bg); background:var(--bg); }
+
+    /* ── SECTIONS ── */
+    .section { display:none; animation:fadeUp .3s ease; }
+    .section.active { display:block; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+    .section-intro { margin:36px 0 24px; }
+    .section-intro h2 { font-family:var(--serif); font-size:26px; font-weight:400; color:#fff; margin-bottom:10px; }
+    .section-intro p { font-size:13px; color:var(--dim); line-height:1.85; max-width:640px; }
+
+    /* ── GD LAYOUT ── */
+    .gd-layout { display:grid; grid-template-columns:1fr 210px; gap:24px; align-items:start; }
+    @media(max-width:640px){ .gd-layout{ grid-template-columns:1fr; } }
+
+    .canvas-wrap {
+      width:100%; height:420px; border:1px solid var(--border);
+      border-radius:10px; overflow:hidden; background:#030407;
+      cursor:grab; position:relative;
+    }
+    .canvas-wrap:active { cursor:grabbing; }
+    .canvas-wrap canvas { width:100%!important; height:100%!important; display:block; }
+
+    .drag-hint {
+      position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+      font-size:10px; color:rgba(221,216,204,.3); letter-spacing:.08em;
+      pointer-events:none; white-space:nowrap;
+    }
+
+    /* ── SIDEBAR ── */
+    .gd-sidebar { display:flex; flex-direction:column; gap:16px; }
+    .ctrl-label { font-size:10px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); margin-bottom:8px; display:block; }
+    .slider-row { display:flex; align-items:center; gap:10px; }
+    input[type=range] { flex:1; -webkit-appearance:none; height:3px; background:var(--border); border-radius:2px; outline:none; cursor:pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:var(--gold); cursor:pointer; box-shadow:0 0 10px rgba(240,165,0,.55); }
+    input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--gold); border:none; }
+    .val-badge { font-size:13px; font-weight:500; color:var(--gold); min-width:36px; text-align:right; }
+
+    .lr-hint { font-size:10.5px; color:var(--dim); line-height:1.6; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg3); min-height:44px; }
+
+    .btn { font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.05em; padding:10px 14px; border:1px solid var(--border); background:var(--bg2); color:var(--text); border-radius:7px; cursor:pointer; transition:all .15s; width:100%; text-align:center; }
+    .btn:hover { border-color:rgba(240,165,0,.4); color:var(--gold); }
+    .btn.primary { background:rgba(240,165,0,.07); border-color:rgba(240,165,0,.3); color:var(--gold); }
+    .btn.primary:hover { background:rgba(240,165,0,.14); }
+    .btn-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+    .stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .stat { background:var(--bg2); border:1px solid var(--border); border-radius:7px; padding:9px 10px; }
+    .stat-lbl { font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin-bottom:3px; }
+    .stat-val { font-size:14px; font-weight:500; color:#fff; }
+
+    .partial-panel { background:var(--bg3); border:1px solid var(--border); border-radius:7px; padding:12px; }
+    .partial-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid rgba(100,120,255,.07); }
+    .partial-row:last-child { border-bottom:none; }
+    .partial-lbl { font-size:11px; color:var(--dim); }
+    .partial-val { font-size:12px; font-weight:500; }
+
+    .conv-msg { font-size:11px; min-height:16px; text-align:center; }
+
+    /* ── ATTENTION ── */
+    .sent-opts { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+    .sent-btn { font-family:var(--mono); font-size:11px; padding:7px 15px; border:1px solid var(--border); background:var(--bg2); color:var(--dim); border-radius:20px; cursor:pointer; transition:all .2s; }
+    .sent-btn:hover { color:var(--text); }
+    .sent-btn.active { border-color:var(--gold); color:var(--gold); background:rgba(240,165,0,.07); }
+
+    .words-box { display:flex; flex-wrap:wrap; gap:9px; padding:24px 20px; background:var(--bg2); border:1px solid var(--border); border-radius:10px; margin-bottom:26px; min-height:84px; align-items:center; }
+    .hint-text { font-size:13px; color:var(--dim); font-style:italic; }
+    .word-chip { font-family:var(--mono); font-size:15px; padding:8px 14px; border:1px solid var(--border); border-radius:7px; cursor:pointer; transition:all .22s; background:var(--bg); color:var(--text); user-select:none; }
+    .word-chip:hover { border-color:rgba(240,165,0,.4); }
+    .word-chip.selected { border-color:var(--gold); color:var(--gold); box-shadow:0 0 14px rgba(240,165,0,.2); background:rgba(240,165,0,.06); }
+
+    .attn-panel { animation:fadeUp .3s ease; }
+    .attn-header { font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); margin-bottom:16px; }
+    .attn-header span { color:var(--gold); font-weight:500; }
+    .attn-bars { display:flex; flex-direction:column; gap:7px; margin-bottom:20px; }
+    .bar-row { display:flex; align-items:center; gap:11px; }
+    .bar-word { font-size:13px; min-width:100px; color:var(--dim); }
+    .bar-track { flex:1; height:5px; background:rgba(255,255,255,.05); border-radius:3px; overflow:hidden; }
+    .bar-fill { height:100%; border-radius:3px; background:var(--gold); transition:width .55s cubic-bezier(.25,0,0,1); width:0%; }
+    .bar-pct { font-size:11px; color:var(--dim); min-width:42px; text-align:right; }
+    .attn-insight { padding:16px 18px; background:rgba(91,200,255,.05); border:1px solid rgba(91,200,255,.15); border-radius:9px; font-size:13px; color:var(--ice); line-height:1.75; }
+
+    footer { margin-top:72px; padding-top:22px; border-top:1px solid var(--border); font-size:11px; color:var(--dim); letter-spacing:.05em; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>How AI <em>Learns</em></h1>
+    <p class="subtitle">Two interactive demonstrations at the core of modern AI — how a model descends toward its optimal state, and how it decides what to focus on when reading language.</p>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('gd')">01 — Gradient Descent</button>
+      <button class="tab-btn"        onclick="switchTab('attn')">02 — Attention Mechanism</button>
+    </div>
+  </header>
+
+  <!-- ══════ GRADIENT DESCENT ══════ -->
+  <div id="sec-gd" class="section active">
+    <div class="section-intro">
+      <h2>The Loss Landscape in 3D</h2>
+      <p>Training a model means navigating a high-dimensional surface of error. Peaks are bad predictions — valleys are good ones. Gradient descent computes the partial derivative with respect to <em>each</em> parameter simultaneously, then steps downhill. Drag to orbit. Adjust learning rate to see convergence vs. oscillation.</p>
+    </div>
+    <div class="gd-layout">
+      <div class="canvas-wrap" id="threeContainer">
+        <div class="drag-hint">drag to orbit · pinch to zoom</div>
+      </div>
+      <div class="gd-sidebar">
+        <div>
+          <span class="ctrl-label">Learning Rate (η)</span>
+          <div class="slider-row">
+            <input type="range" id="lrSlider" min="0.01" max="0.45" step="0.01" value="0.08">
+            <span class="val-badge" id="lrVal">0.08</span>
+          </div>
+          <div class="lr-hint" id="lrHint">Steady convergence — small steps along both ∂x and ∂y.</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btnRestart">↺ Restart</button>
+          <button class="btn" id="btnStep">Step ›</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-lbl">Step</div><div class="stat-val" id="sStep">0</div></div>
+          <div class="stat"><div class="stat-lbl">Loss</div><div class="stat-val" id="sLoss">—</div></div>
+          <div class="stat"><div class="stat-lbl">w₁</div><div class="stat-val" id="sX">—</div></div>
+          <div class="stat"><div class="stat-lbl">w₂</div><div class="stat-val" id="sY">—</div></div>
+        </div>
+        <div class="partial-panel">
+          <div class="ctrl-label" style="margin-bottom:6px">Partial Derivatives</div>
+          <div class="partial-row">
+            <span class="partial-lbl">∂L/∂w₁</span>
+            <span class="partial-val" id="pdx" style="color:#ff7e7e">—</span>
+          </div>
+          <div class="partial-row">
+            <span class="partial-lbl">∂L/∂w₂</span>
+            <span class="partial-val" id="pdy" style="color:#7eb8ff">—</span>
+          </div>
+          <div class="partial-row">
+            <span class="partial-lbl">|∇L|</span>
+            <span class="partial-val" id="gnorm" style="color:var(--gold)">—</span>
+          </div>
+        </div>
+        <div class="conv-msg" id="convMsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ ATTENTION ══════ -->
+  <div id="sec-attn" class="section">
+    <div class="section-intro">
+      <h2>Where Does the Model Look?</h2>
+      <p>Attention lets a transformer decide which words matter most when processing any given token. It computes a weighted focus across every word in the sequence simultaneously. Select a sentence, then click any word to see its attention pattern.</p>
+    </div>
+    <div class="sent-opts" id="sentOpts"></div>
+    <div class="words-box" id="wordsBox">
+      <span class="hint-text">← Select a sentence above, then click a word</span>
+    </div>
+    <div id="attnPanel" style="display:none" class="attn-panel">
+      <div class="attn-header">Attention weights — <span id="selWordLbl"></span></div>
+      <div class="attn-bars" id="attnBars"></div>
+      <div class="attn-insight" id="attnInsight"></div>
+    </div>
+  </div>
+
+  <footer>Interactive demo · AI fundamentals</footer>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   TAB SWITCHING
+═══════════════════════════════════════════════ */
+function switchTab(t) {
+  document.querySelectorAll('.tab-btn').forEach((b,i)=> b.classList.toggle('active', t==='gd'?i===0:i===1));
+  document.getElementById('sec-gd').classList.toggle('active', t==='gd');
+  document.getElementById('sec-attn').classList.toggle('active', t==='attn');
+}
+
+/* ═══════════════════════════════════════════════
+   LOSS FUNCTION  (two weight params: w1=x, w2=y)
+═══════════════════════════════════════════════ */
+const DOMAIN = 4.2;
+const Z_SCALE = 0.72;
+
+function lossVal(x, y) {
+  const bowl   = 0.055 * (x*x + y*y);
+  const gMin   = -3.1  * Math.exp(-((x-0.6)**2 + (y-0.5)**2) * 0.55);  // global min
+  const loc1   = -1.7  * Math.exp(-((x+2.3)**2*0.45 + (y+1.2)**2*0.45)); // local min
+  const loc2   = -1.5  * Math.exp(-((x-1.8)**2*0.45 + (y+2.6)**2*0.45)); // local min
+  const peak1  = +1.8  * Math.exp(-((x+0.4)**2 + (y-0.6)**2) * 1.1);    // peak between starts
+  const peak2  = +1.1  * Math.exp(-((x-2.8)**2*0.7 + (y-1.2)**2*0.7));  // far peak
+  const ridge  = +0.7  * Math.exp(-((x*0.7+y*0.7+0.5)**2) * 0.4);       // diagonal ridge
+  const waves  = 0.22  * Math.sin(x*1.1) * Math.cos(y*1.1) + 0.1*Math.cos(x*2.1);
+  return bowl + gMin + loc1 + loc2 + peak1 + peak2 + ridge + waves + 2.5;
+}
+
+function grad(x, y) {
+  const h = 0.0008;
+  return [
+    (lossVal(x+h,y) - lossVal(x-h,y)) / (2*h),
+    (lossVal(x,y+h) - lossVal(x,y-h)) / (2*h)
+  ];
+}
+
+/* ═══════════════════════════════════════════════
+   THREE.JS SETUP
+═══════════════════════════════════════════════ */
+let renderer, scene, camera, surfaceMesh, ball, pathLine;
+let pathPositions, pathCount = 0;
+const MAX_PATH = 800;
+const SCENE_SCALE = 3.2 / DOMAIN;
+let running = false, rafId = null, ticker = 0;
+const STEP_EVERY = 6;  // frames between gradient steps
+let pos = [-3.2, 3.0], stepCount = 0, lr = 0.08;
+const START = [-3.2, 3.0];
+
+// Pre-compute loss min/max for colormap normalization
+let lossMin = Infinity, lossMax = -Infinity;
+(function precompute() {
+  const S = 40;
+  for (let i = 0; i <= S; i++)
+    for (let j = 0; j <= S; j++) {
+      const x = (i/S - 0.5)*2*DOMAIN, y = (j/S - 0.5)*2*DOMAIN;
+      const v = lossVal(x, y);
+      if (v < lossMin) lossMin = v;
+      if (v > lossMax) lossMax = v;
+    }
+})();
+
+function heightColor(t) {
+  // deep-ocean → teal → lime → amber → crimson
+  const stops = [
+    [0.04, 0.06, 0.42],
+    [0.08, 0.52, 0.72],
+    [0.18, 0.76, 0.44],
+    [0.92, 0.64, 0.08],
+    [0.82, 0.12, 0.12]
+  ];
+  const n = stops.length - 1;
+  const i = Math.min(Math.floor(t * n), n-1);
+  const f = t * n - i;
+  return stops[i].map((v,k) => v + (stops[i+1][k]-v)*f);
+}
+
+function initThree() {
+  const container = document.getElementById('threeContainer');
+  const W = container.clientWidth, H = container.clientHeight;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x03040A);
+  scene.fog = new THREE.FogExp2(0x03040A, 0.038);
+
+  camera = new THREE.PerspectiveCamera(50, W/H, 0.1, 100);
+  camera.position.set(0, 8.5, 10);
+  camera.lookAt(0, 0, 0);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(W, H);
+  container.insertBefore(renderer.domElement, container.firstChild);
+
+  // Lighting
+  const ambient = new THREE.AmbientLight(0x2233aa, 0.9);
+  scene.add(ambient);
+  const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+  sun.position.set(4, 10, 5);
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight(0x4488ff, 0.4);
+  fill.position.set(-5, 3, -5);
+  scene.add(fill);
+
+  buildSurface();
+  buildPath();
+  buildBall();
+  buildAxes();
+
+  setupOrbit(container);
+  setupResize(container);
+  refreshStats();
+  startAnim();
+}
+
+/* ── SURFACE MESH ── */
+function buildSurface() {
+  if (surfaceMesh) { scene.remove(surfaceMesh); surfaceMesh.geometry.dispose(); }
+  const RES = 90;
+  const geo = new THREE.BufferGeometry();
+  const N = (RES+1)*(RES+1);
+  const pos3 = new Float32Array(N*3);
+  const cols  = new Float32Array(N*3);
+  const norms = new Float32Array(N*3);
+
+  for (let iy = 0; iy <= RES; iy++) {
+    for (let ix = 0; ix <= RES; ix++) {
+      const u = ix/RES, v = iy/RES;
+      const wx = (u-0.5)*2*DOMAIN;
+      const wy = (v-0.5)*2*DOMAIN;
+      const lv = lossVal(wx, wy);
+      const sy = lv * Z_SCALE;
+      const idx = iy*(RES+1)+ix;
+      pos3[idx*3]   = wx * SCENE_SCALE;
+      pos3[idx*3+1] = sy;
+      pos3[idx*3+2] = wy * SCENE_SCALE;
+      const t = Math.max(0, Math.min(1, (lv-lossMin)/(lossMax-lossMin)));
+      const [r,g,b] = heightColor(t);
+      cols[idx*3]=r; cols[idx*3+1]=g; cols[idx*3+2]=b;
+    }
+  }
+
+  // indices
+  const idxArr = new Uint32Array(RES*RES*6);
+  let ii = 0;
+  for (let iy = 0; iy < RES; iy++) {
+    for (let ix = 0; ix < RES; ix++) {
+      const a = iy*(RES+1)+ix, b=a+1, c=a+(RES+1), d=c+1;
+      idxArr[ii++]=a; idxArr[ii++]=b; idxArr[ii++]=c;
+      idxArr[ii++]=b; idxArr[ii++]=d; idxArr[ii++]=c;
+    }
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(pos3,3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(cols,3));
+  geo.setIndex(new THREE.BufferAttribute(idxArr,1));
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshPhongMaterial({
+    vertexColors: true, side: THREE.DoubleSide,
+    shininess: 35, specular: new THREE.Color(0x223344)
+  });
+  surfaceMesh = new THREE.Mesh(geo, mat);
+  scene.add(surfaceMesh);
+
+  // Wireframe overlay (subtle)
+  const wireMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff, wireframe: true, opacity: 0.04, transparent: true
+  });
+  const wire = new THREE.Mesh(geo, wireMat);
+  scene.add(wire);
+}
+
+/* ── PATH LINE ── */
+function buildPath() {
+  if (pathLine) scene.remove(pathLine);
+  pathPositions = new Float32Array(MAX_PATH*3);
+  pathCount = 0;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pathPositions,3));
+  geo.setDrawRange(0,0);
+  const mat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1.5 });
+  pathLine = new THREE.Line(geo, mat);
+  scene.add(pathLine);
+  addPathPoint(pos[0], pos[1]);
+}
+
+function addPathPoint(wx, wy) {
+  if (pathCount >= MAX_PATH) return;
+  const sy = lossVal(wx,wy)*Z_SCALE + 0.08;
+  pathPositions[pathCount*3]   = wx*SCENE_SCALE;
+  pathPositions[pathCount*3+1] = sy;
+  pathPositions[pathCount*3+2] = wy*SCENE_SCALE;
+  pathCount++;
+  pathLine.geometry.setDrawRange(0, pathCount);
+  pathLine.geometry.attributes.position.needsUpdate = true;
+}
+
+/* ── BALL ── */
+function buildBall() {
+  if (ball) scene.remove(ball);
+  const geo = new THREE.SphereGeometry(0.13, 16, 16);
+  const mat = new THREE.MeshPhongMaterial({
+    color: 0xf0a500, emissive: 0xf06000, emissiveIntensity: 0.6,
+    shininess: 120
+  });
+  ball = new THREE.Mesh(geo, mat);
+  // Glow ring
+  const ringGeo = new THREE.SphereGeometry(0.22, 16, 16);
+  const ringMat = new THREE.MeshBasicMaterial({ color:0xf0a500, transparent:true, opacity:0.18 });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ball.add(ring);
+  updateBallPos();
+  scene.add(ball);
+}
+
+function updateBallPos() {
+  const sx = pos[0]*SCENE_SCALE;
+  const sy = lossVal(pos[0],pos[1])*Z_SCALE + 0.15;
+  const sz = pos[1]*SCENE_SCALE;
+  ball.position.set(sx, sy, sz);
+}
+
+/* ── AXES ── */
+function buildAxes() {
+  const axMat = (hex) => new THREE.LineBasicMaterial({ color:hex, opacity:0.35, transparent:true });
+  const mkAxis = (p1, p2, col) => {
+    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...p1), new THREE.Vector3(...p2)]);
+    return new THREE.Line(g, axMat(col));
+  };
+  const base = lossMin * Z_SCALE - 0.1;
+  scene.add(mkAxis([-3.3,base,0],[3.3,base,0], 0xff5555)); // w1 axis (red)
+  scene.add(mkAxis([0,base,-3.3],[0,base,3.3], 0x5599ff)); // w2 axis (blue)
+
+  // Axis labels via sprites
+  function makeLabel(text, pos, color) {
+    const c2 = document.createElement('canvas');
+    c2.width=128; c2.height=48;
+    const cx = c2.getContext('2d');
+    cx.font = 'bold 22px monospace';
+    cx.fillStyle = color;
+    cx.fillText(text, 10, 32);
+    const tex = new THREE.CanvasTexture(c2);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, transparent:true, opacity:0.7 }));
+    sp.position.set(...pos);
+    sp.scale.set(1.0, 0.38, 1);
+    scene.add(sp);
+  }
+  makeLabel('w₁ →', [3.7, base, 0], '#ff7e7e');
+  makeLabel('w₂ →', [0, base, 3.7], '#7eb8ff');
+}
+
+/* ── GRADIENT DESCENT STEP ── */
+function gdStep() {
+  const [gx,gy] = grad(pos[0],pos[1]);
+  pos[0] -= lr*gx;
+  pos[1] -= lr*gy;
+  stepCount++;
+  addPathPoint(pos[0],pos[1]);
+  updateBallPos();
+  refreshStats();
+}
+
+function refreshStats() {
+  const lv = lossVal(pos[0],pos[1]);
+  const [gx,gy] = grad(pos[0],pos[1]);
+  const gnorm = Math.sqrt(gx*gx+gy*gy);
+  document.getElementById('sStep').textContent = stepCount;
+  document.getElementById('sLoss').textContent = lv.toFixed(3);
+  document.getElementById('sX').textContent    = pos[0].toFixed(3);
+  document.getElementById('sY').textContent    = pos[1].toFixed(3);
+  document.getElementById('pdx').textContent   = gx.toFixed(3);
+  document.getElementById('pdy').textContent   = gy.toFixed(3);
+  document.getElementById('gnorm').textContent = gnorm.toFixed(4);
+  const msg = document.getElementById('convMsg');
+  if (gnorm < 0.012) { msg.textContent='✓ Converged'; msg.style.color='var(--ice)'; }
+  else if (lv > 80)  { msg.textContent='⚠ Diverging';  msg.style.color='#ff6b6b'; }
+  else               { msg.textContent=''; }
+}
+
+/* ── ANIMATION LOOP ── */
+function animate() {
+  rafId = requestAnimationFrame(animate);
+  if (running) {
+    ticker++;
+    if (ticker % STEP_EVERY === 0) {
+      const lv = lossVal(pos[0],pos[1]);
+      const [gx,gy] = grad(pos[0],pos[1]);
+      const gnorm = Math.sqrt(gx*gx+gy*gy);
+      if (gnorm > 0.010 && stepCount < 600 && lv < 80) gdStep();
+      else running = false;
+    }
+  }
+  // Slow auto-rotate when idle
+  if (!isDragging) {
+    orbitTheta += 0.0018;
+    updateCamera();
+  }
+  renderer.render(scene, camera);
+}
+
+function startAnim() {
+  if (rafId) cancelAnimationFrame(rafId);
+  running = true; ticker = 0;
+  animate();
+}
+
+function restart() {
+  if (rafId) cancelAnimationFrame(rafId);
+  pos = [...START]; stepCount = 0;
+  document.getElementById('convMsg').textContent = '';
+  buildPath();
+  updateBallPos();
+  refreshStats();
+  startAnim();
+}
+
+/* ── ORBIT CONTROLS ── */
+let orbitTheta = 0.55, orbitPhi = 1.02, orbitRadius = 13.5;
+let isDragging = false, lastMouse = {x:0,y:0};
+let lastTouch = null;
+
+function updateCamera() {
+  orbitPhi = Math.max(0.18, Math.min(1.42, orbitPhi));
+  camera.position.set(
+    orbitRadius * Math.sin(orbitPhi) * Math.sin(orbitTheta),
+    orbitRadius * Math.cos(orbitPhi),
+    orbitRadius * Math.sin(orbitPhi) * Math.cos(orbitTheta)
+  );
+  camera.lookAt(0, 0.5, 0);
+}
+
+function setupOrbit(el) {
+  el.addEventListener('mousedown', e => { isDragging=true; lastMouse={x:e.clientX,y:e.clientY}; e.preventDefault(); });
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    orbitTheta -= (e.clientX-lastMouse.x)*0.007;
+    orbitPhi   -= (e.clientY-lastMouse.y)*0.007;
+    lastMouse = {x:e.clientX,y:e.clientY};
+    updateCamera();
+  });
+  window.addEventListener('mouseup', ()=>{ isDragging=false; });
+
+  // Touch
+  el.addEventListener('touchstart', e=>{
+    if (e.touches.length===1){ isDragging=true; lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY}; }
+    else if (e.touches.length===2){ isDragging=false; lastTouch=null; }
+    e.preventDefault();
+  },{passive:false});
+  el.addEventListener('touchmove', e=>{
+    if (e.touches.length===1 && isDragging && lastTouch){
+      orbitTheta -= (e.touches[0].clientX-lastTouch.x)*0.009;
+      orbitPhi   -= (e.touches[0].clientY-lastTouch.y)*0.009;
+      lastTouch = {x:e.touches[0].clientX,y:e.touches[0].clientY};
+      updateCamera();
+    } else if (e.touches.length===2){
+      // pinch zoom
+      const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      if (lastTouch && lastTouch.pinchD) orbitRadius = Math.max(5, Math.min(24, orbitRadius*(lastTouch.pinchD/d)));
+      if (lastTouch) lastTouch.pinchD = d; else lastTouch = {pinchD:d};
+    }
+    e.preventDefault();
+  },{passive:false});
+  el.addEventListener('touchend',()=>{ isDragging=false; lastTouch=null; });
+
+  // Scroll to zoom
+  el.addEventListener('wheel', e=>{
+    orbitRadius = Math.max(5, Math.min(24, orbitRadius + e.deltaY*0.03));
+    updateCamera(); e.preventDefault();
+  },{passive:false});
+}
+
+function setupResize(container) {
+  const ro = new ResizeObserver(()=>{
+    const W=container.clientWidth, H=container.clientHeight;
+    if (!W||!H) return;
+    camera.aspect = W/H;
+    camera.updateProjectionMatrix();
+    renderer.setSize(W,H);
+  });
+  ro.observe(container);
+}
+
+/* ── CONTROLS ── */
+function lrHintText(v) {
+  if (v<=0.03) return 'Very slow — tiny steps. Many iterations needed.';
+  if (v<=0.10) return 'Steady convergence — small steps along both ∂w₁ and ∂w₂.';
+  if (v<=0.18) return 'Fast convergence — larger steps, fewer iterations.';
+  if (v<=0.28) return 'Some oscillation across steep ridges — still converging.';
+  return 'Large steps — watch the path zig-zag and potentially diverge!';
+}
+
+document.getElementById('lrSlider').addEventListener('input', function(){
+  lr = parseFloat(this.value);
+  document.getElementById('lrVal').textContent = lr.toFixed(2);
+  document.getElementById('lrHint').textContent = lrHintText(lr);
+  restart();
+});
+document.getElementById('btnRestart').addEventListener('click', restart);
+document.getElementById('btnStep').addEventListener('click', ()=>{
+  if (rafId) cancelAnimationFrame(rafId);
+  running=false; gdStep();
+  animate(); running=false;
+});
+
+/* ── BOOT ── */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initThree);
+} else {
+  initThree();
+}
+
+
+/* ═══════════════════════════════════════════════
+   ATTENTION MECHANISM
+═══════════════════════════════════════════════ */
+const SENTS = [
+  {
+    label: 'Pronoun Resolution',
+    words: ["The","animal","didn't","cross","the","street","because","it","was","too","tired"],
+    attn: {
+      0:[.30,.22,.08,.05,.10,.05,.05,.07,.03,.03,.02],
+      1:[.10,.22,.12,.10,.05,.08,.07,.12,.05,.05,.04],
+      2:[.08,.20,.15,.12,.05,.08,.09,.10,.05,.05,.03],
+      3:[.05,.24,.10,.14,.05,.18,.06,.09,.04,.03,.02],
+      4:[.28,.14,.07,.05,.12,.10,.05,.07,.04,.04,.04],
+      5:[.04,.10,.08,.16,.06,.22,.10,.10,.05,.05,.04],
+      6:[.04,.12,.09,.10,.04,.10,.17,.18,.07,.05,.04],
+      7:[.03,.44,.05,.06,.03,.06,.10,.10,.05,.04,.04],
+      8:[.04,.15,.07,.06,.04,.07,.10,.18,.12,.08,.09],
+      9:[.04,.12,.07,.05,.04,.05,.06,.14,.10,.16,.17],
+      10:[.03,.30,.06,.05,.03,.05,.07,.24,.09,.06,.02],
+    },
+    insights:{
+      7:'"it" attends most strongly to "animal" — the model resolves the pronoun correctly, understanding the animal was tired, not the street.',
+      10:'"tired" links back to "animal" and "it" — the model connects the state of being tired to the sentence\'s subject.',
+      3:'"cross" pays attention to "animal" and "street" — the verb connects its subject and object.',
+      5:'"street" focuses on "cross" — objects look back at their associated verbs.',
+    }
+  },
+  {
+    label: 'Word-Sense Disambiguation',
+    words: ["The","bank","can","guarantee","deposits","will","eventually","cover","future","tuition","costs"],
+    attn: {
+      0:[.22,.20,.10,.10,.12,.07,.05,.05,.04,.03,.02],
+      1:[.06,.18,.14,.22,.20,.06,.05,.04,.03,.01,.01],
+      2:[.07,.18,.15,.14,.15,.10,.07,.06,.04,.03,.01],
+      3:[.04,.22,.10,.16,.18,.08,.06,.06,.05,.03,.02],
+      4:[.04,.26,.08,.20,.14,.08,.06,.06,.04,.02,.02],
+      5:[.05,.12,.10,.12,.12,.15,.10,.09,.06,.05,.04],
+      6:[.04,.08,.08,.10,.10,.12,.16,.12,.09,.06,.05],
+      7:[.04,.08,.06,.10,.10,.10,.12,.15,.10,.08,.07],
+      8:[.04,.07,.05,.08,.09,.08,.10,.12,.14,.12,.11],
+      9:[.03,.05,.04,.06,.08,.07,.07,.10,.12,.18,.20],
+      10:[.03,.05,.04,.06,.08,.07,.07,.10,.12,.20,.18],
+    },
+    insights:{
+      1:'"bank" attends strongly to "guarantee" and "deposits" — context disambiguates this as a financial institution, not a riverbank.',
+      4:'"deposits" looks toward "bank" and "guarantee" — financial concepts cluster together in attention space.',
+      9:'"tuition" attends to "costs" and "cover" — semantic similarity pulls related concepts together.',
+      3:'"guarantee" distributes attention across subject ("bank") and object ("deposits") — verbs integrate their arguments.',
+    }
+  },
+  {
+    label: 'Coreference Chains',
+    words: ["She","gave","him","her","book","because","he","needed","to","study"],
+    attn: {
+      0:[.18,.12,.16,.20,.08,.06,.12,.04,.02,.02],
+      1:[.14,.14,.12,.10,.12,.08,.12,.08,.05,.05],
+      2:[.32,.10,.10,.06,.06,.06,.22,.05,.02,.01],
+      3:[.38,.08,.06,.10,.10,.06,.08,.06,.04,.04],
+      4:[.07,.10,.06,.08,.18,.07,.10,.12,.05,.17],
+      5:[.08,.09,.08,.06,.10,.15,.14,.12,.09,.09],
+      6:[.30,.08,.20,.06,.06,.06,.10,.08,.04,.02],
+      7:[.08,.08,.10,.06,.10,.10,.15,.14,.08,.11],
+      8:[.05,.06,.05,.05,.10,.10,.12,.16,.12,.19],
+      9:[.05,.06,.05,.05,.24,.08,.12,.18,.06,.11],
+    },
+    insights:{
+      2:'"him" attends to both "She" and "he" — the model tracks gendered pronouns, linking "him" as distinct recipient.',
+      3:'"her" strongly attends to "She" — the model correctly links the possessive pronoun to its referent.',
+      6:'"he" distributes across "She" and "him" — the model holds multiple coreference chains simultaneously.',
+      9:'"study" looks toward "book" and "needed" — goal-oriented words connect to their motivating context.',
+    }
+  }
+];
+
+const DEFAULT_INSIGHT = 'The model assigns attention weights across every token in the sequence, building a rich contextual representation that captures meaning, syntax, and reference simultaneously.';
+let activeSent = null;
+
+function initSentOpts() {
+  const c = document.getElementById('sentOpts');
+  SENTS.forEach((s,i) => {
+    const b = document.createElement('button');
+    b.className='sent-btn'; b.textContent=s.label;
+    b.onclick=()=>pickSent(i); c.appendChild(b);
+  });
+}
+
+function pickSent(i) {
+  activeSent=i;
+  document.querySelectorAll('.sent-btn').forEach((b,j)=>b.classList.toggle('active',j===i));
+  const box=document.getElementById('wordsBox'); box.innerHTML='';
+  SENTS[i].words.forEach((w,wi)=>{
+    const chip=document.createElement('span');
+    chip.className='word-chip'; chip.textContent=w;
+    chip.onclick=()=>pickWord(wi); box.appendChild(chip);
+  });
+  document.getElementById('attnPanel').style.display='none';
+}
+
+function pickWord(wi) {
+  if (activeSent===null) return;
+  const s=SENTS[activeSent];
+  let weights=s.attn[wi];
+  if (!weights){
+    const raw=s.words.map((_,i)=>Math.exp(-Math.abs(i-wi)*0.6)+0.04);
+    const sum=raw.reduce((a,b)=>a+b,0); weights=raw.map(v=>v/sum);
+  }
+  const total=weights.reduce((a,b)=>a+b,0);
+  const norm=weights.map(v=>v/total);
+  const others=norm.filter((_,i)=>i!==wi);
+  const maxW=Math.max(...others);
+  document.querySelectorAll('.word-chip').forEach((chip,i)=>{
+    chip.classList.toggle('selected',i===wi);
+    if (i!==wi){
+      const rel=norm[i]/maxW;
+      chip.style.backgroundColor=`rgba(240,165,0,${(rel*0.42).toFixed(3)})`;
+      chip.style.borderColor=`rgba(240,165,0,${(rel*0.65).toFixed(3)})`;
+      chip.style.color=rel>0.55?'#fff':'';
+    } else { chip.style.backgroundColor=''; chip.style.borderColor=''; chip.style.color=''; }
+  });
+
+  document.getElementById('selWordLbl').textContent=`"${s.words[wi]}"`;
+  const sorted=norm.map((w,i)=>({w,i,word:s.words[i]})).filter(x=>x.i!==wi).sort((a,b)=>b.w-a.w);
+  const maxSW=sorted[0]?.w||1;
+  const bars=document.getElementById('attnBars'); bars.innerHTML='';
+  sorted.forEach(({w,word})=>{
+    const row=document.createElement('div'); row.className='bar-row';
+    row.innerHTML=`<div class="bar-word">${word}</div><div class="bar-track"><div class="bar-fill" data-t="${((w/maxSW)*100).toFixed(1)}"></div></div><div class="bar-pct">${(w*100).toFixed(1)}%</div>`;
+    bars.appendChild(row);
+  });
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    document.querySelectorAll('.bar-fill').forEach(b=>{b.style.width=b.dataset.t+'%';});
+  }));
+  document.getElementById('attnInsight').textContent=s.insights[wi]||DEFAULT_INSIGHT;
+  document.getElementById('attnPanel').style.display='block';
+}
+
+initSentOpts();
+pickSent(0);
+</script>
+</body>
+</html>
