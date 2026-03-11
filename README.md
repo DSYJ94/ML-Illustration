@@ -1,0 +1,1 @@
+Simply a lightweight HTML implementation of gradient descent animations and how transformer attention mechanisms work. Built this to teach my colleagues about Deep Learning systems. Useful for educational purposes.
